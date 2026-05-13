@@ -9,7 +9,7 @@ import plotly.graph_objects as go
 st.set_page_config(page_title="SG Job Insights Pro", layout="wide", page_icon="📈")
 
 # --- DATABASE CONNECTION & ENRICHMENT ---
-3@st.cache_resource
+#@st.cache_resource
 def get_connection():
     con = duckdb.connect(database=':memory:')
     
