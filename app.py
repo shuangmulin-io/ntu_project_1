@@ -77,16 +77,20 @@ def run_analysis(selected_categories):
         filter_sql = f"WHERE list_intersect(regexp_extract_all(s.categories, 'category:([^}},]+)', 1), {cats_list}::VARCHAR[]) != []"
 
     # Join jobs and skills
-    raw_df = con.execute(f"""
-        SELECT 
-            trim(unnest(string_split(js.job_skills, ','))) as skill,
-            s.average_salary,
-            s.seniority
-        FROM sg_jobs s
-        INNER JOIN job_skills js 
-           ON lower(trim(s.title)) = lower(replace(js.job_keyword, '-', ' '))
-        {filter_sql}
-    """).df()
+    query = f"""
+    SELECT 
+        trim(unnest(string_split(js.job_skills, ','))) as skill,
+        TRY_CAST(s.average_salary AS DOUBLE) as average_salary, -- Safety upgrade
+        s.seniority
+    FROM sg_jobs s
+    INNER JOIN job_skills js 
+       ON lower(trim(s.title)) = lower(replace(js.job_keyword, '-', ' '))
+    WHERE list_intersect(
+        regexp_extract_all(s.categories, 'category:([^}},]+)', 1), 
+        {selected_cat}::VARCHAR[]
+    ) != []
+    AND TRY_CAST(s.average_salary AS DOUBLE) IS NOT NULL -- Filter out the bad rows
+"""
 
     if raw_df.empty: return pd.DataFrame()
 
