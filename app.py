@@ -96,21 +96,19 @@ def run_analysis(selected_categories):
         {cats_list}::VARCHAR[]
     ) != []
     AND s.average_salary IS NOT NULL
-    """
-    
+    """  # <--- MUST HAVE THESE THREE QUOTES TO CLOSE THE STRING
+
     try:
+        # 2. Execute and convert to dataframe
         raw_df = con.execute(query).df()
     except Exception as e:
         st.error(f"Analysis Error: {e}")
         return pd.DataFrame(), pd.DataFrame()
 
+    # 3. Check for empty results (Line 100)
     if raw_df.empty: 
         return pd.DataFrame(), pd.DataFrame()
-    AND TRY_CAST(s.average_salary AS DOUBLE) IS NOT NULL -- Filter out the bad rows
-"""
-
-    if raw_df.empty: return pd.DataFrame()
-
+    
     # Recommendation: Calculate Employability Score
     # We group by skill to get stats
     stats = raw_df.groupby('skill').agg(
