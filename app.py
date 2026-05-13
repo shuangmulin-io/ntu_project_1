@@ -16,8 +16,13 @@ def get_connection():
     jobs_csv = "temp_sgjobdata_cleaned-20k.csv"
     skills_csv = "temp_job_skills_cleaned-10k.csv"
     
-    # 1. Load data with All Varchar to avoid header crashes
-    # 2. Enrich data: Outlier filtering + Seniority Classification
+    def get_connection():
+    con = duckdb.connect(database=':memory:')
+    
+    jobs_csv = "temp_sgjobdata_cleaned-20k.csv"
+    skills_csv = "temp_job_skills_cleaned-10k.csv"
+    
+    # Use TRY_CAST and regexp_replace to handle "dirty" currency strings safely
     con.execute(f"""
         CREATE OR REPLACE VIEW sg_jobs_raw AS 
         SELECT * FROM read_csv_auto('{jobs_csv}', all_varchar=True);
@@ -26,8 +31,7 @@ def get_connection():
         SELECT 
             categories,
             title,
-            CAST(average_salary AS DOUBLE) as average_salary,
-            -- Recommendation: Advanced Seniority Classification
+            TRY_CAST(regexp_replace(average_salary, '[^0-9.]', '', 'g') AS DOUBLE) as average_salary,
             CASE 
                 WHEN lower(title) SIMILAR TO '%(intern|trainee|graduate|fresh|entry|junior)%' 
                      OR lower(positionLevels) LIKE '%fresh%' THEN 'Entry-level'
@@ -37,7 +41,7 @@ def get_connection():
             END AS seniority
         FROM sg_jobs_raw
         WHERE title != 'title' 
-          AND CAST(average_salary AS DOUBLE) BETWEEN 500 AND 30000; -- Recommendation: Outlier filtering
+          AND TRY_CAST(regexp_replace(average_salary, '[^0-9.]', '', 'g') AS DOUBLE) BETWEEN 500 AND 30000;
     """)
     
     con.execute(f"CREATE OR REPLACE VIEW job_skills AS SELECT * FROM read_csv_auto('{skills_csv}')")
@@ -68,27 +72,40 @@ def get_unique_categories():
 
 selected_cat = st.sidebar.multiselect("Select Industry", options=get_unique_categories())
 
-# --- ANALYTICS ENGINE: EMPLOYABILITY SCORE ---
 @st.cache_data
 def run_analysis(selected_categories):
-    filter_sql = ""
-    if selected_categories:
-        cats_list = str(selected_categories)
-        filter_sql = f"WHERE list_intersect(regexp_extract_all(s.categories, 'category:([^}},]+)', 1), {cats_list}::VARCHAR[]) != []"
+    # Fix NameError: Initialize raw_df immediately 
+    raw_df = pd.DataFrame()
+    
+    if not selected_categories:
+        return pd.DataFrame(), pd.DataFrame()
 
-    # Join jobs and skills
+    # Format the list for DuckDB SQL
+    cats_list = str(selected_categories)
+
     query = f"""
     SELECT 
         trim(unnest(string_split(js.job_skills, ','))) as skill,
-        TRY_CAST(s.average_salary AS DOUBLE) as average_salary, -- Safety upgrade
+        s.average_salary,
         s.seniority
     FROM sg_jobs s
     INNER JOIN job_skills js 
        ON lower(trim(s.title)) = lower(replace(js.job_keyword, '-', ' '))
     WHERE list_intersect(
         regexp_extract_all(s.categories, 'category:([^}},]+)', 1), 
-        {selected_cat}::VARCHAR[]
+        {cats_list}::VARCHAR[]
     ) != []
+    AND s.average_salary IS NOT NULL
+    """
+    
+    try:
+        raw_df = con.execute(query).df()
+    except Exception as e:
+        st.error(f"Analysis Error: {e}")
+        return pd.DataFrame(), pd.DataFrame()
+
+    if raw_df.empty: 
+        return pd.DataFrame(), pd.DataFrame()
     AND TRY_CAST(s.average_salary AS DOUBLE) IS NOT NULL -- Filter out the bad rows
 """
 
