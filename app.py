@@ -16,12 +16,6 @@ def get_connection():
     jobs_csv = "temp_sgjobdata_cleaned-20k.csv"
     skills_csv = "temp_job_skills_cleaned-10k.csv"
     
-    def get_connection():
-    con = duckdb.connect(database=':memory:')
-    
-    jobs_csv = "temp_sgjobdata_cleaned-20k.csv"
-    skills_csv = "temp_job_skills_cleaned-10k.csv"
-    
     # Use TRY_CAST and regexp_replace to handle "dirty" currency strings safely
     con.execute(f"""
         CREATE OR REPLACE VIEW sg_jobs_raw AS 
