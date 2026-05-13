@@ -52,10 +52,18 @@ st.markdown("Strategize your next move by identifying high-value, accessible ski
 # --- DATA LOADING (CATEGORIES) ---
 @st.cache_data
 def get_unique_categories():
-    df = con.execute("""
-        SELECT DISTINCT unnest(regexp_extract_all(categories, 'category:([^},]+)', 1)) as cat 
-        FROM sg_jobs ORDER BY cat
-    """).df()
+    # Use a subquery to filter out empty/null categories first
+    query = """
+    WITH cleaned_data AS (
+        SELECT categories 
+        FROM sg_jobs 
+        WHERE categories IS NOT NULL AND categories != ''
+    )
+    SELECT DISTINCT trim(unnest(regexp_extract_all(categories, 'category:([^},]+)', 1))) as cat
+    FROM cleaned_data
+    ORDER BY cat
+    """
+    df = con.execute(query).df()
     return df['cat'].tolist()
 
 selected_cat = st.sidebar.multiselect("Select Industry", options=get_unique_categories())
